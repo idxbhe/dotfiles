@@ -9,6 +9,9 @@
 # =============================================================
 
 WIDGET_DIR="$HOME/.config/bspwm/eww"
+LOCK_DIR="/tmp/bspwm-eww-locks"
+
+mkdir -p "$LOCK_DIR"
 
 case "$1" in
 	--menu)
@@ -86,12 +89,18 @@ case "$1" in
 		;;
 		# Eww Widgets
 	--KeyHelp)
+		exec 9>"$LOCK_DIR/csheet.lock"
+		flock -n 9 || exit 0
 		eww -c "$WIDGET_DIR" open --toggle csheet
 		;;
 	--usercard)
+		exec 9>"$LOCK_DIR/launchermenu.lock"
+		flock -n 9 || exit 0
 		eww -c "$WIDGET_DIR" open --toggle launchermenu
 		;;
 	--player)
+		exec 9>"$LOCK_DIR/music.lock"
+		flock -n 9 || exit 0
 		eww -c "$WIDGET_DIR" open --toggle music
 		;;
 	*)
