@@ -26,6 +26,26 @@ result() {
 }
 
 case "$class" in
+    # File picker dialogs (GTK/Qt/browser file choosers) - constrain size & center
+    FileChooser|FileChooserDialog|GtkFileChooserDialog|GtkFileChooserNative|kde-filepicker|FileDialog|QFileDialog|kfilechooser|XdgPortal|xdg-desktop-portal|xdg-desktop-portal-gtk|portal|PortalDialog|zenity|yad)
+	result "state=floating center=on rectangle=900x600+0+0"
+	;;
+    # Electron/Chromium-based apps (VSCode, Discord, etc) - match by title only
+    code|code-oss|VSCodium|Electron|electron|discord|Discord|Steam|steam|spotify|Spotify)
+	case "$title" in
+	    *Open*File*|*Save*File*|*Save*As*|*Upload*File*|*Choose*File*|*Select*File*|*File*Chooser*|*File*Dialog*|*File*Picker*|*pen*iles*|*pload*iles*)
+	        result "state=floating center=on rectangle=900x600+0+0"
+	        ;;
+	esac
+	;;
+    # Firefox/Chrome file picker dialogs (by title) - tightened patterns
+    firefox|Navigator|firefoxdeveloperedition|zen-browser|zen|chromium|google-chrome|google-chrome-stable|brave-browser|brave|vivaldi-stable)
+	case "$title" in
+	    *"Open File"*|*Save*As*|*Upload*File*|*Choose*File*|*Select*File*|*"File Upload"*|*"File Chooser"*|*"File Dialog"*|*"File Picker"*)
+	        result "state=floating center=on rectangle=900x600+0+0"
+	        ;;
+	esac
+	;;
     FloaTerm)
 	result "state=floating center=on rectangle=696x399+0+0"
         ;;
@@ -33,22 +53,22 @@ case "$class" in
 	result "state=floating sticky=on center=on rectangle=390x405+0+0"
         ;;
     RiceEditor)
-	result "state=floating focus=on center=on"
+	result "state=floating focus=on center=on rectangle=700x500+0+0"
         ;;
     mpv)
 	result "state=floating focus=on center=on rectangle=723x407+0+0"
         ;;
     Viewnior)
-        result "state=floating focus=on center=on"
+        result "state=floating focus=on center=on rectangle=900x600+0+0"
         ;;
     TelegramDesktop)
         result "desktop=^4 follow=on"
         ;;
     pavucontrol)
-        result "state=floating center=on"
+        result "state=floating center=on rectangle=900x600+0+0"
         ;;
     Thunar)
-        result "desktop=^2 follow=on"
+        result "state=floating center=on rectangle=1100x600+0+0"
         ;;
     firefox|Navigator)
         result "desktop=^3 follow=on"
@@ -56,7 +76,7 @@ case "$class" in
 esac
 
 case "$instance" in
-	FloaTerm)
+    FloaTerm)
         result "state=floating center=on rectangle=696x399+0+0"
         ;;
     Updating)
