@@ -27,7 +27,7 @@ SCRATCHPAD_NAME="bspwm-scratch"
 CFG_TERM="$HOME/.config/bspwm/config/.term"
 read -r MY_TERM < "$CFG_TERM"
 MAX_WIDTH_PERCENT=70
-HEIGHT_PERCENT=50
+HEIGHT_PERCENT=70
 
 # Function to get geometry of current monitor
 get_monitor_geometry() {

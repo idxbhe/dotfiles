@@ -95,7 +95,7 @@ super + alt + x
 # ----- Environment Apps ----- #
 
 # Scratchpad
-super + alt + o
+alt + grave
     OpenApps --scratch
 
 # jgmenu
