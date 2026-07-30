@@ -43,7 +43,7 @@ calculate_position() {
     WIDTH=$((SCREEN_WIDTH * MAX_WIDTH_PERCENT / 100))
     HEIGHT=$((SCREEN_HEIGHT * HEIGHT_PERCENT / 100))
     X_POS=$((MONITOR_X + (SCREEN_WIDTH - WIDTH) / 2))
-    Y_POS=$MONITOR_Y
+    Y_POS=$((MONITOR_Y + (SCREEN_HEIGHT - HEIGHT) / 2))
 }
 
 # Function to find the window
