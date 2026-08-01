@@ -68,7 +68,11 @@ case "$class" in
         result "state=floating center=on rectangle=900x600+0+0"
         ;;
     Thunar)
-        result "state=floating center=on rectangle=1100x600+0+0"
+	case "$title" in
+	    *Open*File*|*Save*File*|*Save*As*|*Upload*File*|*Choose*File*|*Select*File*|*File*Chooser*|*File*Dialog*|*File*Picker*|*"Open File"*|*"Save As"*|*"File Upload"*|*"File Chooser"*|*"File Dialog"*|*"File Picker"*)
+	        result "state=floating center=on rectangle=900x600+0+0"
+	        ;;
+	esac
         ;;
     firefox|Navigator)
         result "desktop=^3 follow=on"
