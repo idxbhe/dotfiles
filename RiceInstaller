@@ -310,7 +310,7 @@ install_aur_dependencies() {
         cd
     fi
 
-    aur_dependencies="xwinwrap-0.9-bin"
+    aur_dependencies="xwinwrap-0.9-bin shiki-bin"
 
     # Arrays temporales
     failed_aur_deps=""

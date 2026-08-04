@@ -68,6 +68,9 @@ case "$1" in
 	--scratch)
 		Bspwm-ScratchPad
 		;;
+	--shiki)
+		Bspwm-ShikiPad
+		;;
 		# Apps
     --filemanager)
         ${FILEMANAGER:-thunar}

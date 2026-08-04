@@ -98,6 +98,10 @@ super + alt + x
 alt + grave
     OpenApps --scratch
 
+# Shiki Notes Scratchpad
+alt + e
+    OpenApps --shiki
+
 # jgmenu
 ~button3
     win=$(xdotool getmouselocation --shell | sed -n 's/^WINDOW=\(.*\)/\1/p'); \
