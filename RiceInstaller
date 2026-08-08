@@ -608,6 +608,7 @@ install_sddm_themes() {
 
     # 4) Copy sddm.sh helper next to SddmSelector for manual use later
     if [ -f "$HOME/.local/share/idxbhe/sddm/sddm.sh" ]; then
+        mkdir -p "$HOME/.local/bin"
         cp "$HOME/.local/share/idxbhe/sddm/sddm.sh" "$HOME/.local/bin/sddm-install.sh"
         chmod +x "$HOME/.local/bin/sddm-install.sh"
         printf "%b\n" "${BLD}${CGR}✔ Helper installed: ${CBL}~/.local/bin/sddm-install.sh${CNC}"
