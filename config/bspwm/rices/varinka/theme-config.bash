@@ -29,26 +29,26 @@ accent_color="$blackb"
 arch_icon="#0f94d2"
 
 # Bspwm options
-BORDER_WIDTH="0"		# Bspwm border
-TOP_PADDING="42"
+BORDER_WIDTH="1"		# Bspwm border
+TOP_PADDING="22"
 BOTTOM_PADDING="1"
 LEFT_PADDING="1"
 RIGHT_PADDING="1"
-NORMAL_BC="#ced4da"		# Normal border color
-FOCUSED_BC="#f8f9fa"	# Focused border color
+NORMAL_BC="#77767B"		# Normal border color
+FOCUSED_BC="#DEDDDA"	# Focused border color
 
 # Terminal font & size
 term_font_size="10"
 term_font_name="JetBrainsMono Nerd Font"
 
 # Picom options
-P_FADE="true"			# Fade true|false
-P_SHADOWS="true"		# Shadows true|false
-SHADOW_C="#000000"		# Shadow color
-P_CORNER_R="6"			# Corner radius (0 = disabled)
-P_BLUR="false"			# Blur true|false
-P_ANIMATIONS="@"		# (@ = enable) (# = disable)
-P_TERM_OPACITY="1.0"	# Terminal transparency. Range: 0.1 - 1.0 (1.0 = disabled)
+P_FADE="true"		# Fade true|false
+P_SHADOWS="true"	# Shadows true|false
+SHADOW_C="#000000"	# Shadow color
+P_CORNER_R="3"		# Corner radius (0 = disabled)
+P_BLUR="false"		# Blur true|false
+P_ANIMATIONS="@"	# (@ = enable) (# = disable)
+P_TERM_OPACITY="0.85"	# Terminal transparency. Range: 0.1 - 1.0 (1.0 = disabled)
 
 # Dunst
 dunst_offset='(0, 60)'
@@ -106,5 +106,5 @@ geany_theme="z0mbi3-Monochromatic"
 ENGINE="Default"
 
 CUSTOM_DIR="/path/to/your/wallpapers/directory"
-DEFAULT_WALL="$HOME/.config/bspwm/rices/varinka/walls/wall-11.webp"
+DEFAULT_WALL="/home/bhe/.config/bspwm/rices/varinka/walls/wall-03.webp"
 ANIMATED_WALL="$HOME/.config/bspwm/config/assets/animated_wall.mp4"

@@ -126,6 +126,13 @@ bindkey '^[[3~' delete-char
 bindkey "^[[H" beginning-of-line
 bindkey "^[[F" end-of-line
 
+# Bind Ctrl + Right Arrow to move forward one word
+bindkey '^[[1;5C' forward-word
+
+# Bind Ctrl + Left Arrow to move backward one word
+bindkey '^[[1;5D' backward-word
+
+
 #  ┌─┐┬ ┬┌─┐┌┐┌┌─┐┌─┐  ┌┬┐┌─┐┬─┐┌┬┐┬┌┐┌┌─┐┬  ┌─┐  ┌┬┐┬┌┬┐┬  ┌─┐
 #  │  ├─┤├─┤││││ ┬├┤    │ ├┤ ├┬┘│││││││├─┤│  └─┐   │ │ │ │  ├┤
 #  └─┘┴ ┴┴ ┴┘└┘└─┘└─┘   ┴ └─┘┴└─┴ ┴┴┘└┘┴ ┴┴─┘└─┘   ┴ ┴ ┴ ┴─┘└─┘
@@ -160,5 +167,10 @@ alias ll='eza --icons=always --color=always -la'
 #  ┌─┐┬ ┬┌┬┐┌─┐  ┌─┐┌┬┐┌─┐┬─┐┌┬┐
 #  ├─┤│ │ │ │ │  └─┐ │ ├─┤├┬┘ │
 #  ┴ ┴└─┘ ┴ └─┘  └─┘ ┴ ┴ ┴┴└─ ┴
-$HOME/.local/bin/colorscript -r
-#disable-fzf-tab
+#$HOME/.local/bin/colorscript -r
+disable-fzf-tab
+
+# opencode
+export PATH=/home/bhe/.opencode/bin:$PATH
+eval "$(direnv hook zsh)"
+
