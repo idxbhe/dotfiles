@@ -28,6 +28,10 @@ super + @space
 alt + @space
     RiceSelector
 
+# SDDM Theme Selector (login manager themes)
+super + alt + r
+    SddmSelector
+
 # ----- Your Apps ----- #
 
 # Apps (browser, editor, filemanager)

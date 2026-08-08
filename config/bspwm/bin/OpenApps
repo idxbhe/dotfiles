@@ -20,6 +20,9 @@ case "$1" in
 	--rice)
 		RiceSelector
 		;;
+	--sddm)
+		SddmSelector
+		;;
 	--terminal)
 		Term --terminal
 		;;

@@ -1,0 +1,185 @@
+#!/bin/sh
+# =============================================================
+# Author:  gh0stzk / idxbhe
+# Repo:    https://github.com/idxbhe/dotfiles
+# Date:    09.08.2026
+#
+# Script Name: SddmSelector
+# Description: Dynamic SDDM theme switcher for idxbhe bspwm dotfiles
+# Features:
+#   ✔ Lists SDDM themes from ~/.config/bspwm/sddm-themes/
+#   ✔ Rofi menu with preview thumbnails (mirrors RiceSelector style)
+#   ✔ Copies selected theme to /usr/share/sddm/themes/
+#   ✔ Updates /etc/sddm.conf.d/theme.conf (Current=<name>)
+#   ✔ Single-instance lockfile (flock) for safe concurrent runs
+#   ✔ Reads current active theme from /etc/sddm.conf.d/theme.conf
+#   ✔ Friendly notification on success/failure
+#
+# Source of truth:
+#   - User container: ~/.config/bspwm/sddm-themes/ (read-only here)
+#   - System path:    /usr/share/sddm/themes/<name>/ (deployed)
+#   - Active setting: /etc/sddm.conf.d/theme.conf (Current=)
+#
+# Dependencies:
+#   → Core: rofi, sudo
+#
+# Copyright (C) 2021-2026 gh0stzk <z0mbi3.zk@protonmail.com>
+# Licensed under GPL-3.0 license
+# =============================================================
+
+# Paths
+BSPWM_DIR="$HOME/.config/bspwm"
+LOCAL_THEMES_DIR="$BSPWM_DIR/sddm-themes"
+SYSTEM_THEMES_DIR="/usr/share/sddm/themes"
+SDDM_CONF_DIR="/etc/sddm.conf.d"
+SDDM_CONF="$SDDM_CONF_DIR/theme.conf"
+ROFI_THEME="$BSPWM_DIR/config/rofi-themes/SddmSelector.rasi"
+STATE_FILE="$BSPWM_DIR/.sddm-theme"
+
+# Ensure required dirs exist
+mkdir -p "$LOCAL_THEMES_DIR"
+
+# Bail out early if user container is empty/missing
+if [ ! -d "$LOCAL_THEMES_DIR" ] || [ -z "$(ls -A "$LOCAL_THEMES_DIR" 2>/dev/null)" ]; then
+    dunstify -u critical -i dialog-error \
+        "SddmSelector" "No SDDM themes found in $LOCAL_THEMES_DIR\nRun the RiceInstaller first, or copy your themes there."
+    exit 1
+fi
+
+# Single-instance lock
+LOCK_FILE="$BSPWM_DIR/.sddmselector.lock"
+exec 9>"$LOCK_FILE"
+flock -n 9 || {
+    dunstify -u low "SddmSelector" "Already running, exiting."
+    exit 0
+}
+
+# Determine currently active theme
+current_theme=""
+if [ -f "$SDDM_CONF" ]; then
+    current_theme=$(awk -F= '/^Current=/ {gsub(/[ \t]/,"",$2); print $2; exit}' "$SDDM_CONF" 2>/dev/null)
+fi
+# Fallback: probe system dir
+if [ -z "$current_theme" ] && [ -d "$SYSTEM_THEMES_DIR" ]; then
+    current_theme=$(awk -F= '/^Current=/ {gsub(/[ \t]/,"",$2); print $2; exit}' \
+                    /etc/sddm.conf 2>/dev/null)
+fi
+
+# Build themes list
+themes=$(find "$LOCAL_THEMES_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
+
+if [ -z "$themes" ]; then
+    dunstify -u critical "SddmSelector" "No themes found in $LOCAL_THEMES_DIR"
+    exit 1
+fi
+
+# Find index of current theme for rofi pre-selection
+selected_index=-1
+index=0
+IFS='
+'
+for theme in $themes; do
+    if [ "${theme##*/}" = "$current_theme" ]; then
+        selected_index=$index
+        break
+    fi
+    index=$((index + 1))
+done
+
+# Build preview list: prefer metadata.desktop Description, fallback to dir name
+# Thumbnails: pick the first .gif/.png/.jpg/.webp inside Assets/ if it exists,
+# otherwise no icon (rofi will fall back to default).
+ASSETS_DIR="$BSPWM_DIR/sddm-themes-assets"
+mkdir -p "$ASSETS_DIR"
+
+# Show the rofi selection menu
+selected=$(
+    for theme in $themes; do
+        name=${theme##*/}
+        meta="$theme/metadata.desktop"
+        desc="$name"
+        if [ -f "$meta" ]; then
+            d=$(awk -F= '/^Description=/ {gsub(/^[ \t]+|[ \t]+$/,"",$2); print $2; exit}' "$meta" 2>/dev/null)
+            [ -n "$d" ] && desc="$name  —  $d"
+        fi
+        # Optional thumbnail (first .gif/.png in theme dir)
+        thumb=$(find "$theme" -maxdepth 2 -type f \( -iname '*.gif' -o -iname '*.png' -o -iname '*.jpg' -o -iname '*.webp' \) 2>/dev/null | head -n 1)
+        if [ -n "$thumb" ]; then
+            printf "%s\000icon\x1f%s\n" "$desc" "$thumb"
+        else
+            printf "%s\n" "$desc"
+        fi
+    done | rofi -dmenu -p "SddmSelector" \
+                -theme "$ROFI_THEME" \
+                -selected-row "$selected_index"
+)
+unset IFS
+
+# User cancelled
+[ -z "$selected" ] && exit 0
+
+# Extract theme name (everything before first em-dash/space)
+# rofi returns either "name" or "name  —  Description"
+selected_theme=$(printf '%s' "$selected" | awk -F'  —  ' '{print $1}' | awk '{print $1}')
+[ -z "$selected_theme" ] && selected_theme="$selected"
+
+# Verify the theme exists in local container
+if [ ! -d "$LOCAL_THEMES_DIR/$selected_theme" ]; then
+    dunstify -u critical "SddmSelector" "Theme '$selected_theme' not found in $LOCAL_THEMES_DIR"
+    exit 1
+fi
+
+# Apply: copy to /usr/share/sddm/themes/ and update /etc/sddm.conf.d/theme.conf
+if ! command -v sudo >/dev/null 2>&1; then
+    dunstify -u critical "SddmSelector" "'sudo' is required to install SDDM themes system-wide."
+    exit 1
+fi
+
+if [ ! -d "$SYSTEM_THEMES_DIR" ]; then
+    sudo mkdir -p "$SYSTEM_THEMES_DIR" || {
+        dunstify -u critical "SddmSelector" "Failed to create $SYSTEM_THEMES_DIR"
+        exit 1
+    }
+fi
+
+# Remove old + install new (atomic-ish: rm then cp)
+sudo rm -rf "$SYSTEM_THEMES_DIR/$selected_theme"
+if ! sudo cp -R "$LOCAL_THEMES_DIR/$selected_theme" "$SYSTEM_THEMES_DIR/$selected_theme"; then
+    dunstify -u critical "SddmSelector" "Failed to copy theme to $SYSTEM_THEMES_DIR/$selected_theme"
+    exit 1
+fi
+
+# Write /etc/sddm.conf.d/theme.conf
+if [ ! -d "$SDDM_CONF_DIR" ]; then
+    sudo mkdir -p "$SDDM_CONF_DIR" || {
+        dunstify -u critical "SddmSelector" "Failed to create $SDDM_CONF_DIR"
+        exit 1
+    }
+fi
+
+if [ ! -f "$SDDM_CONF" ]; then
+    printf "[Theme]\nCurrent=%s\n" "$selected_theme" | sudo tee "$SDDM_CONF" >/dev/null
+else
+    if grep -q "^Current=" "$SDDM_CONF"; then
+        sudo sed -i "s|^Current=.*|Current=$selected_theme|" "$SDDM_CONF"
+    elif grep -q "^\[Theme\]" "$SDDM_CONF"; then
+        sudo sed -i "/^\[Theme\]/a Current=$selected_theme" "$SDDM_CONF"
+    else
+        printf "\n[Theme]\nCurrent=%s\n" "$selected_theme" | sudo tee -a "$SDDM_CONF" >/dev/null
+    fi
+fi
+
+# Update local state file (for SddmSelector pre-selection next time)
+echo "$selected_theme" > "$STATE_FILE"
+
+# Restart SDDM if running (so change takes effect on next greeter render)
+if systemctl is-active --quiet sddm.service 2>/dev/null; then
+    sudo systemctl restart sddm.service 2>/dev/null && \
+        dunstify -u low -i dialog-information \
+            "SddmSelector" "Theme '$selected_theme' applied.\nSDDM restarted." \
+        || dunstify -u low -i dialog-information \
+            "SddmSelector" "Theme '$selected_theme' applied.\nSDDM restart skipped (will apply on next login)."
+else
+    dunstify -u low -i dialog-information \
+        "SddmSelector" "Theme '$selected_theme' applied.\nIt will appear on next SDDM login."
+fi

@@ -74,6 +74,7 @@ welcome() {
   ${BLD}${CGR}[${CYE}i${CGR}]${CNC} Install my configuration
   ${BLD}${CGR}[${CYE}i${CGR}]${CNC} Enabling MPD service (Music player daemon)
   ${BLD}${CGR}[${CYE}i${CGR}]${CNC} Change your shell to zsh shell
+  ${BLD}${CGR}[${CYE}i${CGR}]${CNC} Install SDDM and 7 SDDM themes (with selector)
 
 ${BLD}${CGR}[${CRE}!${CGR}]${CNC} ${BLD}${CRE}My dotfiles DO NOT modify any of your system configurations${CNC}
 ${BLD}${CGR}[${CRE}!${CGR}]${CNC} ${BLD}${CRE}This script does NOT have the potential power to break your system${CNC}
@@ -160,7 +161,7 @@ install_dependencies() {
     sleep 2
 
     sudo pacman -Syy
-    dependencies="alacritty base-devel bat bc brightnessctl bspwm clipcat dunst eza feh fzf thunar tumbler gvfs-mtp firefox geany git imagemagick jq jgmenu kitty libwebp maim mpc mpd mpv neovim xcolor ncmpcpp npm pamixer pacman-contrib papirus-icon-theme picom playerctl polybar lxsession python-gobject redshift rofi rustup sxhkd xclip xdg-user-dirs xdo xdotool xsettingsd xorg-xdpyinfo xorg-xkill xorg-xprop xorg-xrandr xorg-xsetroot xorg-xwininfo xorg-xrdb yazi zsh zsh-autosuggestions zsh-history-substring-search zsh-syntax-highlighting ttf-inconsolata ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-terminus-nerd ttf-ubuntu-mono-nerd webp-pixbuf-loader"
+    dependencies="alacritty base-devel bat bc brightnessctl bspwm clipcat dunst eza feh fzf thunar tumbler gvfs-mtp firefox geany git imagemagick jq jgmenu kitty libwebp maim mpc mpd mpv neovim xcolor ncmpcpp npm pamixer pacman-contrib papirus-icon-theme picom playerctl polybar lxsession python-gobject redshift rofi rustup sddm sxhkd xclip xdg-user-dirs xdo xdotool xsettingsd xorg-xdpyinfo xorg-xkill xorg-xprop xorg-xrandr xorg-xsetroot xorg-xwininfo xorg-xrdb yazi zsh zsh-autosuggestions zsh-history-substring-search zsh-syntax-highlighting ttf-inconsolata ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-terminus-nerd ttf-ubuntu-mono-nerd webp-pixbuf-loader"
 
     # Arrays temporales
     failed_deps=""
@@ -530,6 +531,92 @@ install_dotfiles() {
     sleep 3
 }
 
+install_sddm_themes() {
+    clear
+    logo "Installing SDDM themes.."
+    printf "%s%s Deploying SDDM themes to local + system directories...%s\n\n" "$BLD" "$CBL" "$CNC"
+    sleep 2
+
+    local SRC="$HOME/.local/share/idxbhe/sddm/themes"
+    local LOCAL_DEST="$HOME/.config/bspwm/sddm-themes"
+    local SYSTEM_DEST="/usr/share/sddm/themes"
+
+    # Bail early if source missing
+    if [ ! -d "$SRC" ]; then
+        printf "%b\n" "${BLD}${CRE}SDDM themes source not found: ${CYE}${SRC}${CNC}"
+        printf "%b\n" "${BLD}${CYE}Skipping SDDM theme installation.${CNC}"
+        sleep 3
+        return 0
+    fi
+
+    # 1) Copy to local user container (~/.config/bspwm/sddm-themes/)
+    #    Acts as the permanent repo that SddmSelector reads from,
+    #    so users keep their themes after deleting ~/.local/share/idxbhe
+    mkdir -p "$LOCAL_DEST"
+    if cp -R "$SRC/." "$LOCAL_DEST/"; then
+        printf "%b\n" "${BLD}${CGR}✔ Copied themes to ${CBL}${LOCAL_DEST}${CGR} (local user container)${CNC}"
+    else
+        printf "%b\n" "${BLD}${CRE}✘ Failed to copy themes to ${CYE}${LOCAL_DEST}${CNC}"
+    fi
+
+    # 2) Copy to system location (/usr/share/sddm/themes/)
+    if [ "$(id -u)" -eq 0 ]; then
+        printf "%b\n" "${BLD}${CRE}Running as root, skipping sudo for system copy${CNC}"
+        SUDO_CMD=""
+    else
+        SUDO_CMD="sudo"
+    fi
+
+    if [ ! -d "$SYSTEM_DEST" ]; then
+        $SUDO_CMD mkdir -p "$SYSTEM_DEST"
+    fi
+
+    local copy_failed=""
+    for theme_dir in "$SRC"/*/; do
+        [ -d "$theme_dir" ] || continue
+        local theme_name
+        theme_name="$(basename "$theme_dir")"
+
+        if $SUDO_CMD rm -rf "$SYSTEM_DEST/$theme_name" 2>/dev/null \
+           && $SUDO_CMD cp -R "$theme_dir" "$SYSTEM_DEST/$theme_name"; then
+            printf "%b\n" "${BLD}${CGR}  ✔ Installed system theme: ${CBL}${theme_name}${CNC}"
+        else
+            copy_failed="$copy_failed $theme_name"
+            printf "%b\n" "${BLD}${CRE}  ✘ Failed system install: ${CYE}${theme_name}${CNC}"
+        fi
+    done
+
+    if [ -n "$copy_failed" ]; then
+        printf "\n%b\n" "${BLD}${CRE}Failed system copies:${CYE}${copy_failed}${CNC}"
+    fi
+
+    # 3) Generate /etc/sddm.conf.d/theme.conf with first theme as default
+    #    (user can change later via SddmSelector / Super+R -> SDDM tab)
+    if $SUDO_CMD mkdir -p "/etc/sddm.conf.d"; then
+        local first_theme
+        first_theme="$(ls -1 "$SRC" 2>/dev/null | head -n 1)"
+        if [ -n "$first_theme" ]; then
+            if [ ! -f "/etc/sddm.conf.d/theme.conf" ]; then
+                printf "[Theme]\nCurrent=%s\n" "$first_theme" | $SUDO_CMD tee "/etc/sddm.conf.d/theme.conf" >/dev/null
+                printf "%b\n" "${BLD}${CGR}✔ Set default SDDM theme: ${CBL}${first_theme}${CNC}"
+            else
+                $SUDO_CMD sed -i "s|^Current=.*|Current=$first_theme|" "/etc/sddm.conf.d/theme.conf" 2>/dev/null
+                printf "%b\n" "${BLD}${CGR}✔ Updated default SDDM theme: ${CBL}${first_theme}${CNC}"
+            fi
+        fi
+    fi
+
+    # 4) Copy sddm.sh helper next to SddmSelector for manual use later
+    if [ -f "$HOME/.local/share/idxbhe/sddm/sddm.sh" ]; then
+        cp "$HOME/.local/share/idxbhe/sddm/sddm.sh" "$HOME/.local/bin/sddm-install.sh"
+        chmod +x "$HOME/.local/bin/sddm-install.sh"
+        printf "%b\n" "${BLD}${CGR}✔ Helper installed: ${CBL}~/.local/bin/sddm-install.sh${CNC}"
+    fi
+
+    printf "\n%s%sSDDM themes installation complete!%s\n" "$BLD" "$CGR" "$CNC"
+    sleep 3
+}
+
 configure_services() {
     clear
     logo "Configuring Services"
@@ -549,6 +636,30 @@ configure_services() {
     # User-level ArchUpdates
     printf "%b\n" "${BLD}${CYE}Enabling user ArchUpdates service...${CNC}"
     systemctl --user enable --now ArchUpdates.timer
+
+    # SDDM Display Manager
+    # Only enable if SDDM binary is actually present (avoids breaking headless installs)
+    if command -v sddm >/dev/null 2>&1; then
+        # Disable any other installed display manager first (gdm, lightdm, lxdm, ly)
+        for dm in gdm lightdm lxdm ly; do
+            if systemctl list-unit-files "${dm}.service" 2>/dev/null | grep -q "${dm}.service"; then
+                if systemctl is-enabled --quiet "${dm}.service" 2>/dev/null; then
+                    printf "%b\n" "${BLD}${CYE}Disabling conflicting DM: ${CBL}${dm}${CNC}"
+                    sudo systemctl disable --now "${dm}.service" 2>/dev/null || true
+                fi
+            fi
+        done
+
+        # Enable SDDM (system service, not --user)
+        printf "%b\n" "${BLD}${CYE}Enabling SDDM display manager...${CNC}"
+        if sudo systemctl enable sddm.service 2>/dev/null; then
+            printf "%b\n" "${BLD}${CGR}SDDM service enabled successfully${CNC}"
+        else
+            printf "%b\n" "${BLD}${CRE}Failed to enable SDDM service (continuing anyway)${CNC}"
+        fi
+    else
+        printf "%b\n" "${BLD}${CYE}SDDM not installed, skipping service enable${CNC}"
+    fi
 
     # Virtual Machine Detection
     is_virtual_machine() {
@@ -644,6 +755,7 @@ clone_dotfiles
 
 backup_existing_config
 install_dotfiles
+install_sddm_themes
 configure_services
 change_default_shell
 final_prompt

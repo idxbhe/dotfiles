@@ -59,7 +59,7 @@ class RiceEditorApp(Gtk.Window):
         # Contenido para cada opción
         rice_options_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         notebook = Gtk.Notebook()
-        tabs = ["Bspwm", "Picom", "Terminal", "Misc"]
+        tabs = ["Bspwm", "Picom", "Terminal", "Misc", "SDDM"]
 
         for tab_name in tabs:
             label = Gtk.Label(label=tab_name)
@@ -430,6 +430,82 @@ class RiceEditorApp(Gtk.Window):
 
                 # Initial display based on current value
                 self.update_wall_engine_options(initial_engine)
+
+            elif tab_name == "SDDM":
+                # SDDM Theme Selector
+                sddm_info = Gtk.Label()
+                sddm_info.set_markup(
+                    "<b>SDDM Login Manager Themes</b>\n"
+                    "<small>Themes are read from "
+                    "<i>~/.config/bspwm/sddm-themes/</i>.\n"
+                    "Selecting a theme copies it to "
+                    "<i>/usr/share/sddm/themes/</i> and updates "
+                    "<i>/etc/sddm.conf.d/theme.conf</i</small>"
+                )
+                sddm_info.set_halign(Gtk.Align.START)
+                sddm_info.set_line_wrap(True)
+                content.pack_start(sddm_info, False, False, 7)
+
+                # Current theme label
+                current_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=7)
+                current_label = Gtk.Label(label="Current theme:")
+                current_label.set_halign(Gtk.Align.START)
+                self.sddm_current_label = Gtk.Label()
+                self.sddm_current_label.set_markup(
+                    f"<b><span foreground='#7560d3'>{self.get_sddm_current_theme()}</span></b>"
+                )
+                current_box.pack_start(current_label, False, False, 0)
+                current_box.pack_start(self.sddm_current_label, False, False, 0)
+                content.pack_start(current_box, False, False, 7)
+
+                # Dropdown for SDDM themes
+                theme_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=7)
+                theme_label = Gtk.Label(label="Select theme:")
+                theme_label.set_halign(Gtk.Align.START)
+
+                self.sddm_theme_combo = Gtk.ComboBoxText()
+                themes = self.get_sddm_available_themes()
+                active_idx = 0
+                current_theme = self.get_sddm_current_theme()
+                for idx, theme in enumerate(themes):
+                    self.sddm_theme_combo.append(theme, theme)
+                    if theme == current_theme:
+                        active_idx = idx
+                self.sddm_theme_combo.set_active(active_idx)
+
+                apply_button = Gtk.Button(label="Apply")
+                apply_button.connect(
+                    "clicked", self.on_apply_sddm_theme, self.sddm_theme_combo
+                )
+
+                theme_box.pack_start(theme_label, False, False, 0)
+                theme_box.pack_start(self.sddm_theme_combo, True, True, 0)
+                theme_box.pack_end(apply_button, False, False, 0)
+                content.pack_start(theme_box, False, False, 7)
+
+                # Refresh button (re-scan themes folder)
+                refresh_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=7)
+                refresh_label = Gtk.Label(label="Re-scan available themes:")
+                refresh_label.set_halign(Gtk.Align.START)
+                refresh_button = Gtk.Button(label="Refresh")
+                refresh_button.connect(
+                    "clicked", self.on_refresh_sddm_themes,
+                    self.sddm_theme_combo, self.sddm_current_label
+                )
+                refresh_box.pack_start(refresh_label, False, False, 0)
+                refresh_box.pack_end(refresh_button, False, False, 0)
+                content.pack_start(refresh_box, False, False, 7)
+
+                # Empty-state hint if no themes found
+                if not themes:
+                    empty_label = Gtk.Label()
+                    empty_label.set_markup(
+                        "<i><span foreground='#f7768e'>No SDDM themes found</span>\n"
+                        "Run RiceInstaller or copy theme dirs into "
+                        "<i>~/.config/bspwm/sddm-themes/</i</i>"
+                    )
+                    empty_label.set_halign(Gtk.Align.START)
+                    content.pack_start(empty_label, False, False, 7)
 
             else:
                 # Un label temporal para mostrar el contenido de cada tab
@@ -2007,6 +2083,187 @@ class RiceEditorApp(Gtk.Window):
             print(f"Error al actualizar fzf-tab on Terminal: {e}")
 
         return False  # Debe retornar False para que el estado del switch se actualice
+
+    # ============================================================
+    # SDDM theme management
+    # ============================================================
+
+    def get_sddm_themes_dir(self):
+        return os.path.expanduser('~/.config/bspwm/sddm-themes')
+
+    def get_sddm_available_themes(self):
+        """Return list of SDDM theme names from the local user container."""
+        themes_dir = self.get_sddm_themes_dir()
+        if not os.path.isdir(themes_dir):
+            return []
+        try:
+            entries = sorted(
+                name for name in os.listdir(themes_dir)
+                if os.path.isdir(os.path.join(themes_dir, name))
+            )
+        except OSError:
+            return []
+        return entries
+
+    def get_sddm_current_theme(self):
+        """Read the active SDDM theme from /etc/sddm.conf.d/theme.conf.
+
+        Falls back to /etc/sddm.conf if the drop-in file is absent.
+        """
+        candidates = [
+            '/etc/sddm.conf.d/theme.conf',
+            '/etc/sddm.conf',
+        ]
+        for path in candidates:
+            if not os.path.isfile(path):
+                continue
+            try:
+                with open(path, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('Current='):
+                            return line.split('=', 1)[1].strip()
+            except (OSError, PermissionError):
+                continue
+        return 'none'
+
+    def on_apply_sddm_theme(self, button, combo):
+        """Apply the selected SDDM theme.
+
+        Mirrors SddmSelector: copies the theme to /usr/share/sddm/themes/,
+        rewrites /etc/sddm.conf.d/theme.conf, and refreshes the current
+        label in the UI.
+        """
+        theme = combo.get_active_text()
+        if not theme:
+            self.show_error_dialog("No SDDM theme selected.")
+            return
+
+        themes_dir = self.get_sddm_themes_dir()
+        src = os.path.join(themes_dir, theme)
+        if not os.path.isdir(src):
+            self.show_error_dialog(
+                f"Theme '{theme}' not found in {themes_dir}"
+            )
+            return
+
+        # 1) System copy (requires sudo)
+        system_dest = f"/usr/share/sddm/themes/{theme}"
+        try:
+            subprocess.run(
+                ['sudo', 'rm', '-rf', system_dest],
+                check=False, capture_output=True
+            )
+            result = subprocess.run(
+                ['sudo', 'cp', '-R', src, system_dest],
+                check=True, capture_output=True, text=True
+            )
+        except subprocess.CalledProcessError as e:
+            self.show_error_dialog(
+                f"Failed to copy theme to {system_dest}:\n{e.stderr or e}"
+            )
+            return
+        except FileNotFoundError:
+            self.show_error_dialog(
+                "'sudo' is required to install SDDM themes system-wide."
+            )
+            return
+
+        # 2) Update /etc/sddm.conf.d/theme.conf
+        conf_dir = '/etc/sddm.conf.d'
+        conf_file = os.path.join(conf_dir, 'theme.conf')
+        try:
+            subprocess.run(
+                ['sudo', 'mkdir', '-p', conf_dir],
+                check=True, capture_output=True
+            )
+            if not os.path.isfile(conf_file):
+                # Create new file with [Theme]/Current=
+                subprocess.run(
+                    ['sudo', 'tee', conf_file],
+                    input=f"[Theme]\nCurrent={theme}\n",
+                    capture_output=True, text=True, check=True
+                )
+            else:
+                # Update existing file
+                subprocess.run(
+                    ['sudo', 'sed', '-i',
+                     f's|^Current=.*|Current={theme}|', conf_file],
+                    check=True, capture_output=True
+                )
+        except subprocess.CalledProcessError as e:
+            self.show_error_dialog(
+                f"Failed to update {conf_file}:\n{e.stderr or e}"
+            )
+            return
+
+        # 3) Update local state + UI
+        state_file = os.path.expanduser('~/.config/bspwm/.sddm-theme')
+        try:
+            with open(state_file, 'w') as f:
+                f.write(f"{theme}\n")
+        except OSError:
+            pass
+
+        if hasattr(self, 'sddm_current_label'):
+            self.sddm_current_label.set_markup(
+                f"<b><span foreground='#7560d3'>{theme}</span></b>"
+            )
+
+        # 4) Restart SDDM if running so the change takes effect now
+        try:
+            check = subprocess.run(
+                ['systemctl', 'is-active', '--quiet', 'sddm.service'],
+                check=False, capture_output=True
+            )
+            if check.returncode == 0:
+                subprocess.run(
+                    ['sudo', 'systemctl', 'restart', 'sddm.service'],
+                    check=False, capture_output=True
+                )
+        except FileNotFoundError:
+            pass
+
+        self.show_info_dialog(
+            f"SDDM theme '{theme}' applied successfully."
+        )
+
+    def on_refresh_sddm_themes(self, button, combo, current_label):
+        """Re-scan ~/.config/bspwm/sddm-themes/ and repopulate the combo."""
+        combo.remove_all()
+        themes = self.get_sddm_available_themes()
+        current_theme = self.get_sddm_current_theme()
+        active_idx = 0
+        for idx, theme in enumerate(themes):
+            combo.append(theme, theme)
+            if theme == current_theme:
+                active_idx = idx
+        combo.set_active(active_idx if themes else -1)
+        current_label.set_markup(
+            f"<b><span foreground='#7560d3'>{current_theme}</span></b>"
+        )
+
+    # ============================================================
+    # Generic dialog helpers used by the SDDM handlers above
+    # ============================================================
+
+    def show_info_dialog(self, message):
+        dialog = Gtk.MessageDialog(
+            transient_for=self, flags=0, message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK, text="SDDM Theme"
+        )
+        dialog.format_secondary_text(message)
+        dialog.run()
+        dialog.destroy()
+
+    def show_error_dialog(self, message):
+        dialog = Gtk.MessageDialog(
+            transient_for=self, flags=0, message_type=Gtk.MessageType.ERROR,
+            buttons=Gtk.ButtonsType.OK, text="SDDM Theme Error"
+        )
+        dialog.format_secondary_text(message)
+        dialog.run()
+        dialog.destroy()
 
 def main():
     app = RiceEditorApp()
