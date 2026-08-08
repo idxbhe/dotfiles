@@ -1,0 +1,212 @@
+#!/bin/sh
+# =============================================================
+# LiveWallSelect - Selector for live/animated wallpapers from $HOME/Walls
+# Features:
+#   ✔ Picks mp4/mkv/gif (Animated engine) or images (Default engine) from $HOME/Walls
+#   ✔ Rofi menu with thumbnail grid (mirrors WallSelect style)
+#   ✔ XXHash64 + mtime fast cache; only regenerates thumbnails on real change
+#   ✔ Auto-updates current rice theme-config.bash (ENGINE, DEFAULT_WALL or ANIMATED_WALL)
+#   ✔ Applies wallpaper immediately and refreshes rofi header via WallSync
+#   ✔ Single-instance lockfile (flock) for safe concurrent runs
+#   ✔ Friendly notification if $HOME/Walls is missing or empty
+#
+# Copyright (C) 2021-2026 gh0stzk <z0mbi3.zk@protonmail.com>
+# Licensed under GPL-3.0 license
+# =============================================================
+
+WALLS_DIR="$HOME/Walls"
+
+# ---------- Bail out early if no walls available ----------
+if [ ! -d "$WALLS_DIR" ]; then
+    dunstify -u normal -i ~/.config/bspwm/config/assets/wallpaper.svg \
+        "LiveWallSelect" "No wallpaper library found.\nExpected directory: $WALLS_DIR"
+    exit 1
+fi
+
+# Find any supported media (images + videos)
+file_list=$(mktemp)
+trap 'rm -f "$file_list"' EXIT
+
+find "$WALLS_DIR" -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \
+       -o -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.gif' \) \
+    -print0 > "$file_list"
+
+if [ ! -s "$file_list" ]; then
+    dunstify -u normal -i ~/.config/bspwm/config/assets/wallpaper.svg \
+        "LiveWallSelect" "No wallpapers found in $WALLS_DIR.\nDrop some .jpg/.png/.webp or .mp4/.mkv/.gif files there."
+    exit 1
+fi
+
+# ---------- Setup ----------
+read -r current_rice <"$HOME/.config/bspwm/.rice"
+cacheDir="$HOME/.cache/$USER/$current_rice/livewalls"
+theme_cfg="$HOME/.config/bspwm/rices/$current_rice/theme-config.bash"
+
+[ -d "$cacheDir" ] || mkdir -p "$cacheDir"
+
+# Single-instance lock.
+exec 9>"${cacheDir}/.livewallselect.lock"
+flock 9
+
+rofi_command="rofi -dmenu -theme $HOME/.config/bspwm/config/rofi-themes/WallSelect.rasi"
+
+# ---------- Parallel thumbnail generation ----------
+get_optimal_jobs() {
+    cores=$(nproc)
+    if [ "$cores" -le 2 ]; then
+        echo 2
+    elif [ "$cores" -gt 4 ]; then
+        echo 4
+    else
+        echo $((cores - 1))
+    fi
+}
+PARALLEL_JOBS=${LIVEWALLSELECT_JOBS:-$(get_optimal_jobs)}
+
+# Per-file processor. For videos: extract first frame with ffmpeg, then thumb it.
+# For images: thumb directly.
+process_func_def='process_file() {
+    media="$1"
+    base="${media##*/}"
+    thumb="${cacheDir}/${base}.png"
+    meta_file="${cacheDir}/.${base}.meta"
+
+    stat_info=$(stat -c "%Y %s" "$media") || return 0
+    cur_mtime=${stat_info%% *}
+    cur_size=${stat_info#* }
+
+    saved_mtime=""
+    saved_size=""
+    saved_hash=""
+    if [ -f "$thumb" ] && [ -f "$meta_file" ]; then
+        read -r saved_mtime saved_size saved_hash < "$meta_file"
+    fi
+
+    if [ "$cur_mtime" = "$saved_mtime" ] && [ "$cur_size" = "$saved_size" ]; then
+        return 0
+    fi
+
+    current_hash=$(xxh64sum "$media")
+    current_hash=${current_hash%% *}
+
+    if [ "$current_hash" = "$saved_hash" ] && [ -f "$thumb" ]; then
+        printf "%s %s %s\n" "$cur_mtime" "$cur_size" "$current_hash" > "$meta_file"
+        return 0
+    fi
+
+    case "$media" in
+        *.mp4|*.mkv|*.gif)
+            tmp_frame=$(mktemp --suffix=.png)
+            ffmpeg -loglevel error -y -i "$media" -vframes 1 "$tmp_frame" >/dev/null 2>&1
+            magick "$tmp_frame" -strip -define jpeg:size=600x600 -thumbnail 300x300^ \
+                -gravity center -extent 300x300 "$thumb" \
+                && printf "%s %s %s\n" "$cur_mtime" "$cur_size" "$current_hash" > "$meta_file"
+            rm -f "$tmp_frame"
+            ;;
+        *)
+            magick "$media" -strip -define jpeg:size=600x600 -thumbnail 300x300^ \
+                -gravity center -extent 300x300 "$thumb" \
+                && printf "%s %s %s\n" "$cur_mtime" "$cur_size" "$current_hash" > "$meta_file"
+            ;;
+    esac
+}'
+
+export process_func_def cacheDir
+xargs -0 -P "$PARALLEL_JOBS" -I {} sh -c "$process_func_def
+process_file \"\$1\"" _ {} < "$file_list"
+
+# Drop orphaned cache entries (wallpapers removed from $WALLS_DIR)
+for cached in "$cacheDir"/*; do
+    [ -f "$cached" ] || continue
+    base="${cached##*/}"
+    # Strip the .png suffix we added for thumbs before matching
+    base_noext="${base%.png}"
+    # Look for matching original by name (any supported ext)
+    match=$(find "$WALLS_DIR" -type f -iname "$base_noext" -print -quit 2>/dev/null)
+    if [ -z "$match" ]; then
+        rm -f "$cached" "${cacheDir}/.${base}.meta"
+    fi
+done
+
+# ---------- Rofi selection ----------
+# Build rofi entries: basename \0 icon \037 path-to-thumb
+selection=$(xargs -0 basename -a < "$file_list" |
+    LC_ALL=C sort |
+    while IFS= read -r name; do
+        thumb="${cacheDir}/${name}.png"
+        printf '%s\000icon\037%s\n' "$name" "$thumb"
+    done | $rofi_command)
+
+[ -z "$selection" ] && exit 0
+
+# Resolve the actual selected media path
+selected_path=$(grep -F -z -m1 -a "$selection" "$file_list" | tr -d '\0')
+# Above grep is binary-safe; grep returns 0 even without -z on mawk. Fallback:
+if [ -z "$selected_path" ]; then
+    selected_path=$(while IFS= read -r line; do
+        [ "$(basename "$line")" = "$selection" ] && { echo "$line"; break; }
+    done < "$file_list" 2>/dev/null)
+fi
+[ -z "$selected_path" ] && exit 1
+
+# Decide engine + which var to set based on extension
+case "$selected_path" in
+    *.mp4|*.mkv|*.gif)
+        new_engine="Animated"
+        new_value="$selected_path"
+        target_var="ANIMATED_WALL"
+        ;;
+    *)
+        new_engine="Default"
+        new_value="$selected_path"
+        target_var="DEFAULT_WALL"
+        ;;
+esac
+
+# ---------- Update theme-config.bash for current rice ----------
+[ -f "$theme_cfg" ] || {
+    dunstify -u critical -i ~/.config/bspwm/config/assets/wallpaper.svg \
+        "LiveWallSelect" "Theme config missing: $theme_cfg"
+    exit 1
+}
+
+# Escape any double quotes/backslashes in the path for safe sed insertion
+escaped_value=$(printf '%s' "$new_value" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+escaped_engine=$(printf '%s' "$new_engine" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+
+sed -i "$theme_cfg" \
+    -e "s|^ENGINE=.*|ENGINE=\"$escaped_engine\"|" \
+    -e "s|^${target_var}=.*|${target_var}=\"$escaped_value\"|"
+
+# ---------- Apply wallpaper immediately ----------
+case "$new_engine" in
+    Animated)
+        # Stop any existing slideshow loop
+        if [ -f /tmp/wall_refresh.pid ]; then
+            kill "$(cat /tmp/wall_refresh.pid)" 2>/dev/null
+            rm -f /tmp/wall_refresh.pid
+        fi
+        # Stop any existing animated wallpaper
+        AnimatedWall --stop 2>/dev/null || true
+        # Start new animated wallpaper (NO feh for animated!)
+        AnimatedWall --start "$selected_path"
+        WallSync --animated &
+        ;;
+    *)
+        # Stop any existing slideshow loop
+        if [ -f /tmp/wall_refresh.pid ]; then
+            kill "$(cat /tmp/wall_refresh.pid)" 2>/dev/null
+            rm -f /tmp/wall_refresh.pid
+        fi
+        # Stop animated wallpaper if running
+        AnimatedWall --stop 2>/dev/null || true
+        # Apply static wallpaper
+        feh --bg-fill "$selected_path"
+        WallSync &
+        ;;
+esac
+
+# ---------- Confirmation notification ----------
+dunstify -u low -i ~/.config/bspwm/config/assets/wallpaper.svg \
+    "LiveWallSelect" "Applied: $(basename "$selected_path")\nEngine: $new_engine"

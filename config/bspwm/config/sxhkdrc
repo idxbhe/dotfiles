@@ -56,6 +56,10 @@ super + alt + t
 super + alt + w
     WallSelect
 
+# Live wallpaper selector (from $HOME/Walls)
+super + ctrl + w
+    LiveWallSelect
+
 # Mount Android phones
 super + alt + a
     OpenApps --android

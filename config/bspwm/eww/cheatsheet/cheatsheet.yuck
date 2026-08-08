@@ -71,6 +71,9 @@
         (label :class "keys" :xalign 0 :text "Wallpaper Selector")
         (label :class "keys-alt" :xalign 1 :text "Super + Alt + w"))
       (box :orientation "h" :space-evenly "true"
+        (label :class "keys" :xalign 0 :text "Live Wallpaper Selector")
+        (label :class "keys-alt" :xalign 1 :text "Super + Ctrl + w"))
+      (box :orientation "h" :space-evenly "true"
         (label :class "keys" :xalign 0 :text "Terminal selector")
         (label :class "keys-alt" :xalign 1 :text "Super + Alt + t"))
       (box :orientation "h" :space-evenly "true"
