@@ -75,6 +75,7 @@ welcome() {
   ${BLD}${CGR}[${CYE}i${CGR}]${CNC} Enabling MPD service (Music player daemon)
   ${BLD}${CGR}[${CYE}i${CGR}]${CNC} Change your shell to zsh shell
   ${BLD}${CGR}[${CYE}i${CGR}]${CNC} Install SDDM and 7 SDDM themes (with selector)
+  ${BLD}${CGR}[${CYE}i${CGR}]${CNC} Install GRUB theme (CyberGRUB-2077)
 
 ${BLD}${CGR}[${CRE}!${CGR}]${CNC} ${BLD}${CRE}My dotfiles DO NOT modify any of your system configurations${CNC}
 ${BLD}${CGR}[${CRE}!${CGR}]${CNC} ${BLD}${CRE}This script does NOT have the potential power to break your system${CNC}
@@ -161,7 +162,7 @@ install_dependencies() {
     sleep 2
 
     sudo pacman -Syy
-    dependencies="alacritty base-devel bat bc brightnessctl bspwm clipcat dunst eza feh fzf thunar tumbler gvfs-mtp firefox geany git imagemagick jq jgmenu kitty libwebp maim mpc mpd mpv neovim xcolor ncmpcpp npm pamixer pacman-contrib papirus-icon-theme picom playerctl polybar lxsession python-gobject redshift rofi rustup sddm sxhkd xclip xdg-user-dirs xdo xdotool xsettingsd xorg-xdpyinfo xorg-xkill xorg-xprop xorg-xrandr xorg-xsetroot xorg-xwininfo xorg-xrdb yazi zsh zsh-autosuggestions zsh-history-substring-search zsh-syntax-highlighting ttf-inconsolata ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-terminus-nerd ttf-ubuntu-mono-nerd webp-pixbuf-loader"
+    dependencies="alacritty base-devel bat bc brightnessctl bspwm clipcat dunst eza feh fzf thunar tumbler gvfs-mtp firefox geany git grub imagemagick jq jgmenu kitty libwebp maim mpc mpd mpv neovim xcolor ncmpcpp npm pamixer pacman-contrib papirus-icon-theme picom playerctl polybar lxsession python-gobject redshift rofi rustup sddm sxhkd xclip xdg-user-dirs xdo xdotool xsettingsd xorg-xdpyinfo xorg-xkill xorg-xprop xorg-xrandr xorg-xsetroot xorg-xwininfo xorg-xrdb yazi zsh zsh-autosuggestions zsh-history-substring-search zsh-syntax-highlighting ttf-inconsolata ttf-jetbrains-mono ttf-jetbrains-mono-nerd ttf-terminus-nerd ttf-ubuntu-mono-nerd webp-pixbuf-loader"
 
     # Arrays temporales
     failed_deps=""
@@ -618,6 +619,125 @@ install_sddm_themes() {
     sleep 3
 }
 
+install_grub_theme() {
+    clear
+    logo "Installing GRUB theme (CyberGRUB-2077).."
+    printf "%s%s Deploying GRUB theme to system...%s\n\n" "$BLD" "$CBL" "$CNC"
+    sleep 2
+
+    local SRC="$HOME/.local/share/idxbhe/grub/CyberGRUB-2077"
+    local THEME_NAME="CyberGRUB-2077"
+    local THEME_DIR=""
+    local GRUB_ALIAS="grub"
+    local GRUB_COMMAND="grub-mkconfig"
+
+    # Bail early if source missing
+    if [ ! -d "$SRC" ]; then
+        printf "%b\n" "${BLD}${CRE}GRUB theme source not found: ${CYE}${SRC}${CNC}"
+        printf "%b\n" "${BLD}${CYE}Skipping GRUB theme installation.${CNC}"
+        sleep 3
+        return 0
+    fi
+
+    # Detect grub vs grub2
+    if command -v grub2-mkconfig >/dev/null 2>&1 && [ -d "/boot/grub2" ]; then
+        GRUB_ALIAS="grub2"
+        GRUB_COMMAND="grub2-mkconfig"
+        THEME_DIR="/boot/grub2/themes"
+    elif command -v grub-mkconfig >/dev/null 2>&1 && [ -d "/boot/grub" ]; then
+        GRUB_ALIAS="grub"
+        GRUB_COMMAND="grub-mkconfig"
+        THEME_DIR="/boot/grub/themes"
+    else
+        printf "%b\n" "${BLD}${CRE}No GRUB installation detected (no grub-mkconfig or grub2-mkconfig).${CNC}"
+        printf "%b\n" "${BLD}${CYE}Skipping GRUB theme installation.${CNC}"
+        sleep 3
+        return 0
+    fi
+
+    printf "%b\n" "${BLD}${CYE}Detected: ${CBL}${GRUB_ALIAS}${CYE} (${GRUB_COMMAND})${CNC}"
+
+    # Create theme directory if needed
+    if [ ! -d "$THEME_DIR" ]; then
+        sudo mkdir -p "$THEME_DIR"
+        printf "%b\n" "${BLD}${CYE}Created ${THEME_DIR}${CNC}"
+    fi
+
+    # Copy theme to system
+    if sudo rm -rf "${THEME_DIR}/${THEME_NAME}" 2>/dev/null \
+       && sudo cp -R "$SRC" "${THEME_DIR}/"; then
+        printf "%b\n" "${BLD}${CGR}✔ Installed GRUB theme: ${CBL}${THEME_NAME}${CNC} to ${THEME_DIR}/${THEME_NAME}"
+    else
+        printf "%b\n" "${BLD}${CRE}✘ Failed to copy GRUB theme to ${THEME_DIR}${CNC}"
+        sleep 3
+        return 1
+    fi
+
+    # Update /etc/default/grub
+    local GRUB_CFG="/etc/default/grub"
+    local GRUB_THEME_PATH="GRUB_THEME=\"${THEME_DIR}/${THEME_NAME}/theme.txt\""
+
+    if [ ! -f "$GRUB_CFG" ]; then
+        printf "%b\n" "${BLD}${CRE}GRUB config not found: ${CYE}${GRUB_CFG}${CNC}"
+        sleep 3
+        return 1
+    fi
+
+    # Backup original
+    sudo cp "$GRUB_CFG" "${GRUB_CFG}.backup.$(date +%Y%m%d-%H%M%S)"
+
+    # Update GRUB_THEME
+    if grep -qE '^#?GRUB_THEME=' "$GRUB_CFG"; then
+        sudo sed -i -E "s|^#?GRUB_THEME=.*|${GRUB_THEME_PATH}|" "$GRUB_CFG"
+    else
+        echo "" | sudo tee -a "$GRUB_CFG" >/dev/null
+        echo "$GRUB_THEME_PATH" | sudo tee -a "$GRUB_CFG" >/dev/null
+    fi
+
+    # Disable terminal output (required for graphical theme)
+    sudo sed -i 's/^GRUB_TERMINAL_OUTPUT=/#GRUB_TERMINAL_OUTPUT=/' "$GRUB_CFG"
+
+    # Set GFXMODE to auto
+    if grep -qE '^#?GRUB_GFXMODE=' "$GRUB_CFG"; then
+        sudo sed -i -E 's|^#?GRUB_GFXMODE=.*|GRUB_GFXMODE=auto|' "$GRUB_CFG"
+    else
+        echo "GRUB_GFXMODE=auto" | sudo tee -a "$GRUB_CFG" >/dev/null
+    fi
+    sudo sed -i 's/^#GRUB_GFXMODE=/GRUB_GFXMODE=/' "$GRUB_CFG"
+
+    # Set GFXPAYLOAD_LINUX to keep
+    if grep -qE '^#?GRUB_GFXPAYLOAD_LINUX=' "$GRUB_CFG"; then
+        sudo sed -i -E 's|^#?GRUB_GFXPAYLOAD_LINUX=.*|GRUB_GFXPAYLOAD_LINUX=keep|' "$GRUB_CFG"
+    else
+        echo "GRUB_GFXPAYLOAD_LINUX=keep" | sudo tee -a "$GRUB_CFG" >/dev/null
+    fi
+    sudo sed -i 's/^#GRUB_GFXPAYLOAD_LINUX=/GRUB_GFXPAYLOAD_LINUX=/' "$GRUB_CFG"
+
+    printf "%b\n" "${BLD}${CGR}✔ Updated ${GRUB_CFG} with theme settings${CNC}"
+
+    # Regenerate grub.cfg
+    local GRUB_CONFIG_PATH="/boot/${GRUB_ALIAS}/grub.cfg"
+    printf "%b\n" "${BLD}${CYE}Regenerating ${GRUB_CONFIG_PATH}...${CNC}"
+
+    if sudo "${GRUB_COMMAND}" -o "${GRUB_CONFIG_PATH}" >/dev/null 2>&1; then
+        printf "%b\n" "${BLD}${CGR}✔ GRUB config regenerated: ${GRUB_CONFIG_PATH}${CNC}"
+    else
+        printf "%b\n" "${BLD}${CRE}✘ Failed to regenerate GRUB config${CNC}"
+        sleep 3
+        return 1
+    fi
+
+    # Copy helper script for manual use later
+    if [ -f "$HOME/.local/share/idxbhe/grub/install.sh" ]; then
+        cp "$HOME/.local/share/idxbhe/grub/install.sh" "$HOME/.local/bin/grub-theme-install.sh"
+        chmod +x "$HOME/.local/bin/grub-theme-install.sh"
+        printf "%b\n" "${BLD}${CGR}✔ Helper installed: ${CBL}~/.local/bin/grub-theme-install.sh${CNC}"
+    fi
+
+    printf "\n%s%sGRUB theme installation complete!%s\n" "$BLD" "$CGR" "$CNC"
+    sleep 3
+}
+
 configure_services() {
     clear
     logo "Configuring Services"
@@ -757,6 +877,7 @@ clone_dotfiles
 backup_existing_config
 install_dotfiles
 install_sddm_themes
+install_grub_theme
 configure_services
 change_default_shell
 final_prompt

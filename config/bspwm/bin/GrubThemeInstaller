@@ -1,0 +1,221 @@
+#!/bin/sh
+# =============================================================
+# GRUB Theme Installer - Manual installer for CyberGRUB-2077
+# Source: idxbhe/dotfiles (fork of gh0stzk/dotfiles)
+# Original: CyberGRUB-2077 by adnksharp
+# =============================================================
+
+# Theme info
+THEME_NAME="CyberGRUB-2077"
+THEME_SRC="$HOME/.config/bspwm/grub-themes/$THEME_NAME"
+# Fallback to repo location if local container doesn't exist
+[ -d "$THEME_SRC" ] || THEME_SRC="$HOME/.local/share/idxbhe/grub/CyberGRUB-2077"
+
+# Colors (matching RiceInstaller style)
+C_MAIN='\033[38;2;202;169;224m'
+C_ACCENT='\033[38;2;145;177;240m'
+C_DIM='\033[38;2;129;122;150m'
+C_GREEN='\033[38;2;166;209;137m'
+C_YELLOW='\033[38;2;229;200;144m'
+C_RED='\033[38;2;231;130;132m'
+C_BOLD='\033[1m'
+C_RESET='\033[0m'
+
+header() {
+    clear
+    echo -e "${C_MAIN}${C_BOLD}"
+    echo " ╭──────────────────────────────────────────╮"
+    echo " │         🔧 GRUB THEME INSTALLER 🔧       │"
+    echo " ╰──────────────────────────────────────────╯"
+    echo -e "${C_RESET}"
+}
+
+info() { echo -e "${C_MAIN}${C_BOLD} ╭─ ${C_ACCENT}$1${C_RESET}"; }
+substep() { echo -e "${C_MAIN}${C_BOLD} │  ${C_DIM}❯ ${C_RESET}$1"; }
+success() { echo -e "${C_MAIN}${C_BOLD} ╰─ ${C_GREEN}✔ ${C_RESET}$1\n"; }
+error() { echo -e "${C_MAIN}${C_BOLD} ╰─ ${C_RED}✘ ${C_RESET}$1\n"; }
+warn() { echo -e "${C_MAIN}${C_BOLD} │  ${C_YELLOW}⚠ ${C_RESET}$1"; }
+
+# Check root
+check_root() {
+    if [ "$(id -u)" -ne 0 ]; then
+        error "This script must be run as root (use sudo)."
+        exit 1
+    fi
+}
+
+# Detect GRUB variant
+detect_grub() {
+    if command -v grub2-mkconfig >/dev/null 2>&1 && [ -d "/boot/grub2" ]; then
+        GRUB_ALIAS="grub2"
+        GRUB_COMMAND="grub2-mkconfig"
+        THEME_DIR="/boot/grub2/themes"
+    elif command -v grub-mkconfig >/dev/null 2>&1 && [ -d "/boot/grub" ]; then
+        GRUB_ALIAS="grub"
+        GRUB_COMMAND="grub-mkconfig"
+        THEME_DIR="/boot/grub/themes"
+    else
+        error "No GRUB installation detected (no grub-mkconfig or grub2-mkconfig)."
+        exit 1
+    fi
+    substep "Detected: ${GRUB_ALIAS} (${GRUB_COMMAND})"
+}
+
+# Main installation
+install_theme() {
+    info "Installing ${THEME_NAME} GRUB theme..."
+
+    # Check source
+    if [ ! -d "$THEME_SRC" ]; then
+        error "Theme source not found at: $THEME_SRC"
+        error "Run the RiceInstaller first, or ensure the theme exists."
+        exit 1
+    fi
+    substep "Source: $THEME_SRC"
+
+    # Create theme directory
+    [ -d "$THEME_DIR" ] || mkdir -p "$THEME_DIR"
+    substep "Theme directory: $THEME_DIR"
+
+    # Copy theme
+    substep "Copying theme to ${THEME_DIR}/${THEME_NAME}..."
+    rm -rf "${THEME_DIR}/${THEME_NAME}"
+    cp -R "$THEME_SRC" "${THEME_DIR}/" || {
+        error "Failed to copy theme"
+        exit 1
+    }
+    success "Theme copied successfully"
+
+    # Update /etc/default/grub
+    GRUB_CFG="/etc/default/grub"
+    GRUB_THEME_PATH="GRUB_THEME=\"${THEME_DIR}/${THEME_NAME}/theme.txt\""
+
+    if [ ! -f "$GRUB_CFG" ]; then
+        error "GRUB config not found: $GRUB_CFG"
+        exit 1
+    fi
+
+    # Backup
+    cp "$GRUB_CFG" "${GRUB_CFG}.backup.$(date +%Y%m%d-%H%M%S)"
+    substep "Backed up ${GRUB_CFG}"
+
+    # Update GRUB_THEME
+    if grep -qE '^#?GRUB_THEME=' "$GRUB_CFG"; then
+        sed -i -E "s|^#?GRUB_THEME=.*|${GRUB_THEME_PATH}|" "$GRUB_CFG"
+    else
+        echo "" >> "$GRUB_CFG"
+        echo "$GRUB_THEME_PATH" >> "$GRUB_CFG"
+    fi
+
+    # Disable terminal output
+    sed -i 's/^GRUB_TERMINAL_OUTPUT=/#GRUB_TERMINAL_OUTPUT=/' "$GRUB_CFG"
+
+    # GFXMODE
+    if grep -qE '^#?GRUB_GFXMODE=' "$GRUB_CFG"; then
+        sed -i -E 's|^#?GRUB_GFXMODE=.*|GRUB_GFXMODE=auto|' "$GRUB_CFG"
+    else
+        echo "GRUB_GFXMODE=auto" >> "$GRUB_CFG"
+    fi
+    sed -i 's/^#GRUB_GFXMODE=/GRUB_GFXMODE=/' "$GRUB_CFG"
+
+    # GFXPAYLOAD_LINUX
+    if grep -qE '^#?GRUB_GFXPAYLOAD_LINUX=' "$GRUB_CFG"; then
+        sed -i -E 's|^#?GRUB_GFXPAYLOAD_LINUX=.*|GRUB_GFXPAYLOAD_LINUX=keep|' "$GRUB_CFG"
+    else
+        echo "GRUB_GFXPAYLOAD_LINUX=keep" >> "$GRUB_CFG"
+    fi
+    sed -i 's/^#GRUB_GFXPAYLOAD_LINUX=/GRUB_GFXPAYLOAD_LINUX=/' "$GRUB_CFG"
+
+    success "Updated ${GRUB_CFG} with theme settings"
+
+    # Regenerate grub.cfg
+    GRUB_CONFIG_PATH="/boot/${GRUB_ALIAS}/grub.cfg"
+    info "Regenerating GRUB config: ${GRUB_CONFIG_PATH}"
+
+    if "${GRUB_COMMAND}" -o "${GRUB_CONFIG_PATH}"; then
+        success "GRUB config regenerated: ${GRUB_CONFIG_PATH}"
+    else
+        error "Failed to regenerate GRUB config"
+        exit 1
+    fi
+}
+
+# Uninstall theme
+uninstall_theme() {
+    info "Uninstalling ${THEME_NAME} GRUB theme..."
+
+    detect_grub
+
+    # Remove theme directory
+    if [ -d "${THEME_DIR}/${THEME_NAME}" ]; then
+        rm -rf "${THEME_DIR}/${THEME_NAME}"
+        success "Removed theme from ${THEME_DIR}"
+    else
+        warn "Theme not found at ${THEME_DIR}/${THEME_NAME}"
+    fi
+
+    # Restore GRUB config (remove GRUB_THEME line, restore terminal output)
+    GRUB_CFG="/etc/default/grub"
+    if [ -f "$GRUB_CFG" ]; then
+        # Comment out GRUB_THEME
+        sed -i -E 's|^GRUB_THEME=|#GRUB_THEME=|' "$GRUB_CFG"
+        # Re-enable terminal output if it was disabled
+        sed -i 's/^#GRUB_TERMINAL_OUTPUT=/GRUB_TERMINAL_OUTPUT=/' "$GRUB_CFG"
+        success "Restored ${GRUB_CFG} (GRUB_THEME commented out)"
+    fi
+
+    # Regenerate
+    GRUB_CONFIG_PATH="/boot/${GRUB_ALIAS}/grub.cfg"
+    info "Regenerating GRUB config..."
+    if "${GRUB_COMMAND}" -o "${GRUB_CONFIG_PATH}"; then
+        success "GRUB config regenerated without theme"
+    else
+        error "Failed to regenerate GRUB config"
+        exit 1
+    fi
+}
+
+# Usage
+usage() {
+    echo "Usage: $0 [install|uninstall|help]"
+    echo ""
+    echo "Commands:"
+    echo "  install    - Install CyberGRUB-2077 theme (requires root)"
+    echo "  uninstall  - Remove theme and restore default GRUB"
+    echo "  help       - Show this help"
+    echo ""
+    echo "The theme is sourced from: $THEME_SRC"
+    echo "If not found, falls back to: \$HOME/.local/share/idxbhe/grub/CyberGRUB-2077"
+}
+
+# Main
+main() {
+    header
+
+    case "${1:-help}" in
+        install)
+            check_root
+            detect_grub
+            install_theme
+            success "GRUB theme installation complete!"
+            substep "Reboot to see the new theme"
+            ;;
+        uninstall)
+            check_root
+            detect_grub
+            uninstall_theme
+            success "GRUB theme uninstalled!"
+            substep "Reboot to restore default GRUB"
+            ;;
+        help|--help|-h)
+            usage
+            ;;
+        *)
+            error "Unknown command: $1"
+            usage
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
