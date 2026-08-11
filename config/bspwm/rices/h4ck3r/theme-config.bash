@@ -29,8 +29,8 @@ accent_color="#1B2333"
 arch_icon="#0f94d2"
 
 # Bspwm options
-BORDER_WIDTH="0"		# Bspwm border
-TOP_PADDING="43"
+BORDER_WIDTH="1"		# Bspwm border
+TOP_PADDING="23"
 BOTTOM_PADDING="1"
 LEFT_PADDING="1"
 RIGHT_PADDING="1"
@@ -42,13 +42,13 @@ term_font_size="10"
 term_font_name="JetBrainsMono Nerd Font"
 
 # Picom options
-P_FADE="false"			# Fade true|false
-P_SHADOWS="false"		# Shadows true|false
-SHADOW_C="#000000"		# Shadow color
-P_CORNER_R="0"			# Corner radius (0 = disabled)
-P_BLUR="false"			# Blur true|false
+P_FADE="false"		# Fade true|false
+P_SHADOWS="false"	# Shadows true|false
+SHADOW_C="#000000"	# Shadow color
+P_CORNER_R="0"		# Corner radius (0 = disabled)
+P_BLUR="false"		# Blur true|false
 P_ANIMATIONS="#"		# (@ = enable) (# = disable)
-P_TERM_OPACITY="1.0"	# Terminal transparency. Range: 0.1 - 1.0 (1.0 = disabled)
+P_TERM_OPACITY="0.85"	# Terminal transparency. Range: 0.1 - 1.0 (1.0 = disabled)
 
 # Dunst
 dunst_offset='(0, 60)'
@@ -106,5 +106,5 @@ geany_theme="z0mbi3-HackTheBox"
 ENGINE="Default"
 
 CUSTOM_DIR="/path/to/your/wallpapers/directory"
-DEFAULT_WALL="$HOME/.config/bspwm/rices/h4ck3r/walls/wall-01.webp"
+DEFAULT_WALL="/home/bhe/.config/bspwm/rices/h4ck3r/walls/wall-05.webp"
 ANIMATED_WALL="$HOME/.config/bspwm/config/assets/animated_wall.mp4"
