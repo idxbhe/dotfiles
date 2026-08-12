@@ -30,7 +30,7 @@ save_to_clipboard = true
 [window]
 decorations = "none"
 dynamic_title = true
-opacity = 1.0
+opacity = 0.88
 padding = { x = 15, y = 15 }
 dynamic_padding = true
 resize_increments = true
@@ -43,3 +43,13 @@ multiplier = 3
 animation = "Linear"
 duration = 0
 command = { program = "paplay", args = ["/usr/share/sounds/freedesktop/stereo/dialog-error.oga"] }
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Shift"
+chars = "\u001B\r"
+
+[[keyboard.bindings]]
+key = "Back"
+mods = "Control"
+chars = "\u001B[3;5~"

@@ -110,7 +110,8 @@ function dir_icon {
   fi
 }
 
-PS1='%B%F{blue}%f%b  %B%F{magenta}%n%f%b $(dir_icon)  %B%F{red}%~%f%b${vcs_info_msg_0_} %(?.%B%F{green}.%F{red})%f%b '
+PS1='%B%F{blue}%f%b  %B%F{magenta}%n%f%b $(dir_icon)  %B%F{red}%~%f%b${vcs_info_msg_0_}
+%(?.%B%F{green}.%F{red})%f%b '
 
 #  ┌─┐┬  ┬ ┬┌─┐┬┌┐┌┌─┐
 #  ├─┘│  │ ││ ┬││││└─┐
@@ -126,11 +127,20 @@ bindkey '^[[3~' delete-char
 bindkey "^[[H" beginning-of-line
 bindkey "^[[F" end-of-line
 
-# Bind Ctrl + Right Arrow to move forward one word
+# Bind Ctrl + Right Arrow to move forward one word (VSCode-style)
 bindkey '^[[1;5C' forward-word
 
-# Bind Ctrl + Left Arrow to move backward one word
+# Bind Ctrl + Left Arrow to move backward one word (VSCode-style)
 bindkey '^[[1;5D' backward-word
+
+# Bind Ctrl + Backspace to delete backward one word (VSCode-style)
+bindkey '^[[3;5~' backward-kill-word
+
+# Bind Alt + Backspace to delete backward one word (VSCode-style)
+bindkey '^[^?' backward-kill-word
+
+# Treat only alphanumerics as word characters (like VSCode)
+WORDCHARS=''
 
 
 #  ┌─┐┬ ┬┌─┐┌┐┌┌─┐┌─┐  ┌┬┐┌─┐┬─┐┌┬┐┬┌┐┌┌─┐┬  ┌─┐  ┌┬┐┬┌┬┐┬  ┌─┐
